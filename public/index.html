@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ხუმროHub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo" onclick="showPage('home')">ხუმროHub 😄</div>
+    <nav>
+      <a onclick="showPage('home')">მთავარი</a>
+      <a onclick="showPage('profile')">პროფილი</a>
+      <a id="adminNav" class="hidden" onclick="showPage('admin')">Admin Panel</a>
+    </nav>
+  </header>
+
+  <section id="homePage">
+    <section class="hero">
+      <div>
+        <h1>ადგილი, სადაც სერიოზულობა ისჯება სიცილით.</h1>
+        <p>დაპოსტე ტექსტური ხუმრობა, meme სურათი, დააკომენტარე და დაარეპორტე ცუდი პოსტები.</p>
+        <button class="btn" onclick="scrollToPost()">დაპოსტე ხუმრობა</button>
+      </div>
+
+      <div class="daily-joke">
+        <h2>დღის ხუმრობა</h2>
+        <p id="dailyJokeText"></p>
+        <button class="light-btn" onclick="changeDailyJoke()">სხვა ხუმრობა</button>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat-card"><h3 id="totalJokes">0</h3><p>ხუმრობა</p></div>
+      <div class="stat-card"><h3 id="totalLaughs">0</h3><p>სიცილის რეაქცია</p></div>
+      <div class="stat-card"><h3 id="topCategory">-</h3><p>აქტიური კატეგორია</p></div>
+    </section>
+
+    <main class="container">
+      <aside class="sidebar">
+        <div class="auth-box">
+          <h3>ანგარიში</h3>
+
+          <div id="guestBox">
+            <input type="text" id="authUsername" placeholder="username" />
+            <input type="password" id="authPassword" placeholder="password" />
+            <div class="auth-actions">
+              <button class="btn small-btn" onclick="register()">რეგისტრაცია</button>
+              <button class="light-btn" onclick="login()">შესვლა</button>
+            </div>
+            <p class="error" id="authError"></p>
+          </div>
+
+          <div id="userBox" class="hidden">
+            <div class="avatar-row">
+              <img id="currentAvatar" class="avatar" src="/default-avatar.png" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22%3E%3Crect width=%2260%22 height=%2260%22 rx=%2230%22 fill=%22%23ff9fd0%22/%3E%3Ctext x=%2230%22 y=%2238%22 text-anchor=%22middle%22 font-size=%2228%22%3E😄%3C/text%3E%3C/svg%3E'" />
+              <div>
+                <p>შესული ხარ როგორც:</p>
+                <h3 id="currentUser"></h3>
+                <p id="roleBadge" class="role-badge"></p>
+              </div>
+            </div>
+
+            <label class="file-label">
+              პროფილის ფოტო
+              <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="uploadAvatar()" />
+            </label>
+
+            <button class="light-btn" onclick="logout()">გამოსვლა</button>
+          </div>
+        </div>
+
+        <h3 class="category-title">კატეგორიები</h3>
+        <div class="category active" onclick="filterCategory('ყველა', this)">🌍 ყველა</div>
+        <div class="category" onclick="filterCategory('სტუდენტური', this)">🎓 სტუდენტური</div>
+        <div class="category" onclick="filterCategory('IT', this)">💻 IT</div>
+        <div class="category" onclick="filterCategory('ყოველდღიური', this)">🚌 ყოველდღიური</div>
+        <div class="category" onclick="filterCategory('შავი იუმორი', this)">🖤 შავი იუმორი</div>
+        <div class="category" onclick="filterCategory('აბსურდული', this)">🐸 აბსურდული</div>
+      </aside>
+
+      <section>
+        <div class="post-box" id="post">
+          <h2>დაწერე ახალი ხუმრობა</h2>
+
+          <select id="categoryInput">
+            <option value="სტუდენტური">🎓 სტუდენტური</option>
+            <option value="IT">💻 IT</option>
+            <option value="ყოველდღიური">🚌 ყოველდღიური</option>
+            <option value="შავი იუმორი">🖤 შავი იუმორი</option>
+            <option value="აბსურდული">🐸 აბსურდული</option>
+          </select>
+
+          <textarea id="jokeInput" placeholder="ჩაწერე შენი ხუმრობა აქ..."></textarea>
+
+          <label class="file-label">
+            ხუმრობის ფოტო / meme
+            <input type="file" id="jokeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" />
+          </label>
+
+          <div class="post-actions">
+            <p class="rule">ფოტო optional არის. მაქსიმუმ 2MB.</p>
+            <button class="btn" onclick="addJoke()">გამოქვეყნება</button>
+          </div>
+
+          <p class="error" id="errorText"></p>
+        </div>
+
+        <div class="controls">
+          <input type="text" id="searchInput" placeholder="მოძებნე ხუმრობა..." oninput="loadJokes()" />
+          <select id="sortInput" onchange="loadJokes()">
+            <option value="new">ახლები</option>
+            <option value="top">ყველაზე სასაცილო</option>
+            <option value="dead">ყველაზე 💀</option>
+          </select>
+        </div>
+
+        <div id="jokesList"></div>
+      </section>
+    </main>
+  </section>
+
+  <section id="profilePage" class="page hidden">
+    <div class="wide-card">
+      <h2>პროფილი</h2>
+      <div id="profileContent"></div>
+    </div>
+  </section>
+
+  <section id="adminPage" class="page hidden">
+    <div class="wide-card">
+      <h2>Admin Panel</h2>
+      <p class="rule">აქ ჩანს reports და users. Admin-ს შეუძლია report-ის წაშლა ან თავად ხუმრობის მართვა მთავარ გვერდზე.</p>
+
+      <div class="admin-grid">
+        <div>
+          <h3>Reports</h3>
+          <div id="reportsList"></div>
+        </div>
+
+        <div>
+          <h3>Users</h3>
+          <div id="usersList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>ხუმროHub © 2026 — პატარა სოციალური საიტი ხუმრობებისთვის.</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

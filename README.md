@@ -22,8 +22,8 @@
 Default:
 
 ```text
-username: admin
-password: admin1234
+username: 
+password: 
 ```
 
 შეგიძლია შეცვალო `.env` ფაილით:

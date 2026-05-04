@@ -113,6 +113,34 @@ async function getUser(req) {
 async function requireUser(req,res,next) { const u = await getUser(req); if(!u) return res.status(401).json({error:'ჯერ უნდა შეხვიდე ანგარიშში.'}); req.user=u; next(); }
 async function requireAdmin(req,res,next) { const u = await getUser(req); if(!u || u.role !== 'admin') return res.status(403).json({error:'ეს გვერდი მხოლოდ admin-ისთვისაა.'}); req.user=u; next(); }
 
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return req.socket.remoteAddress || "unknown";
+}
+
+async function logIp(req, user, action) {
+  try {
+    await pool.query(
+      "INSERT INTO ip_logs (user_id, username, ip, action, user_agent) VALUES ($1, $2, $3, $4, $5)",
+      [
+        user ? user.id : null,
+        user ? user.username : null,
+        getClientIp(req),
+        action,
+        req.headers["user-agent"] || null
+      ]
+    );
+  } catch (error) {
+    console.log("IP log failed:", error.message);
+  }
+}
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname,'public')));
@@ -126,7 +154,9 @@ app.post('/api/register', async (req,res,next)=>{ try{
   if(exists.rowCount) return res.status(400).json({error:'ეს სახელი უკვე დაკავებულია.'});
   const token = makeToken();
   const r = await pool.query('INSERT INTO users (username,password_hash,role,token) VALUES ($1,$2,$3,$4) RETURNING id,username,role,avatar', [username,hashPassword(password),'user',token]);
-  res.status(201).json({...r.rows[0], token});
+  const newUser = {...r.rows[0], token};
+  await logIp(req, newUser, "register");
+  res.status(201).json(newUser);
 } catch(e){next(e)} });
 
 app.post('/api/login', async (req,res,next)=>{ try{

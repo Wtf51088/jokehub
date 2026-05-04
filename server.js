@@ -100,6 +100,18 @@ async function initDb() {
     )
   `);
 
+  
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS banned_ips (
+      id SERIAL PRIMARY KEY,
+      ip TEXT UNIQUE NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE`);
+
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin1234';
   const admin = await pool.query('SELECT id FROM users WHERE username=$1', [adminUsername]);
@@ -154,9 +166,26 @@ async function logIp(req, user, action) {
   }
 }
 
+
+async function blockBannedIp(req, res, next) {
+  try {
+    const ip = getClientIp(req);
+    const result = await pool.query("SELECT * FROM banned_ips WHERE ip = $1", [ip]);
+
+    if (result.rowCount > 0) {
+      return res.status(403).json({ error: "ეს IP დაბლოკილია." });
+    }
+
+    next();
+  } catch (error) {
+    next();
+  }
+}
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname,'public')));
+app.use('/api', blockBannedIp);
 
 app.post('/api/register', async (req,res,next)=>{ try{
   const username = String(req.body.username || '').trim(); const password = req.body.password || '';
@@ -258,6 +287,68 @@ app.get('/api/admin/ip-logs', requireAdmin, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'IP logs ვერ მოიძებნა' });
   }
+});
+
+
+app.post('/api/admin/ban-ip', requireAdmin, async (req, res) => {
+  const { ip, reason } = req.body;
+
+  if (!ip || ip.trim().length < 3) {
+    return res.status(400).json({ error: 'IP არასწორია.' });
+  }
+
+  await pool.query(
+    "INSERT INTO banned_ips (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO UPDATE SET reason = EXCLUDED.reason",
+    [ip.trim(), reason || null]
+  );
+
+  res.json({ message: 'IP დაიბლოკა.' });
+});
+
+app.delete('/api/admin/ban-ip/:ip', requireAdmin, async (req, res) => {
+  await pool.query("DELETE FROM banned_ips WHERE ip = $1", [req.params.ip]);
+  res.json({ message: 'IP ban მოიხსნა.' });
+});
+
+app.get('/api/admin/banned-ips', requireAdmin, async (req, res) => {
+  const result = await pool.query("SELECT * FROM banned_ips ORDER BY id DESC");
+  res.json(result.rows);
+});
+
+app.patch('/api/admin/users/:id/ban', requireAdmin, async (req, res) => {
+  const { banned } = req.body;
+  const userId = Number(req.params.id);
+
+  const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+
+  if (user.rowCount === 0) {
+    return res.status(404).json({ error: 'User ვერ მოიძებნა.' });
+  }
+
+  if (user.rows[0].role === 'admin') {
+    return res.status(400).json({ error: 'Admin-ის დაბლოკვა არ შეიძლება.' });
+  }
+
+  await pool.query("UPDATE users SET is_banned = $1, token = CASE WHEN $1 = TRUE THEN NULL ELSE token END WHERE id = $2", [Boolean(banned), userId]);
+
+  res.json({ message: banned ? 'User დაიბლოკა.' : 'User unblock გაკეთდა.' });
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+
+  const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+
+  if (user.rowCount === 0) {
+    return res.status(404).json({ error: 'User ვერ მოიძებნა.' });
+  }
+
+  if (user.rows[0].role === 'admin') {
+    return res.status(400).json({ error: 'Admin account-ის წაშლა არ შეიძლება.' });
+  }
+
+  await pool.query("DELETE FROM users WHERE id = $1", [userId]);
+  res.json({ message: 'User წაიშალა.' });
 });
 
 app.get('*', (req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));

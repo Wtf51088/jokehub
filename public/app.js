@@ -685,8 +685,18 @@ async function loadAdminPanel() {
   const ipLogsResponse = await fetch("/api/admin/ip-logs", { headers: authHeaders() });
   const ipLogs = await ipLogsResponse.json();
 
-  const bannedIpsResponse = await fetch("/api/admin/banned-ips", { headers: authHeaders() });
-  const bannedIps = await bannedIpsResponse.json();
+  let bannedIps = [];
+
+  try {
+    const bannedIpsResponse = await fetch("/api/admin/banned-ips", { headers: authHeaders() });
+    bannedIps = await bannedIpsResponse.json();
+
+    if (!Array.isArray(bannedIps)) {
+      bannedIps = [];
+    }
+  } catch (error) {
+    bannedIps = [];
+  }
 
   document.getElementById("reportsList").innerHTML = reports.length === 0
     ? `<p class="rule">Reports არ არის.</p>`
@@ -769,7 +779,7 @@ async function banIp(ip) {
     return;
   }
 
-  loadAdminPanel();
+  await loadAdminPanel();
 }
 
 async function unbanIp(ip) {
@@ -785,7 +795,7 @@ async function unbanIp(ip) {
     return;
   }
 
-  loadAdminPanel();
+  await loadAdminPanel();
 }
 
 async function toggleUserBan(userId, banned) {

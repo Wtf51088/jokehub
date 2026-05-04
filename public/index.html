@@ -64,7 +64,8 @@
 
             <label class="file-label">
               პროფილის ფოტო
-              <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="uploadAvatar()" />
+              <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="showSelectedFileName('avatarInput', 'avatarFileName'); uploadAvatar();" />
+              <span id="avatarFileName" class="selected-file"></span>
             </label>
 
             <button class="light-btn" onclick="logout()">გამოსვლა</button>
@@ -96,11 +97,12 @@
 
           <label class="file-label">
             ხუმრობის ფოტო / meme
-            <input type="file" id="jokeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" />
+            <input type="file" id="jokeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="showSelectedFileName('jokeImageInput', 'jokeImageName')" />
+            <span id="jokeImageName" class="selected-file"></span>
           </label>
 
           <div class="post-actions">
-            <p class="rule">ფოტო optional არის. მაქსიმუმ 2MB.</p>
+            <p class="rule">ფოტო optional არის. მაქსიმუმ 10MB.</p>
             <button class="btn" onclick="addJoke()">გამოქვეყნება</button>
           </div>
 
@@ -149,6 +151,7 @@
 
   <footer>ხუმროHub © 2026 — პატარა სოციალური საიტი ხუმრობებისთვის.</footer>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -519,3 +519,13 @@ footer {
     align-items: stretch;
   }
 }
+
+
+.selected-file {
+  display: block;
+  margin-top: 8px;
+  color: #ff3f9d;
+  font-size: 13px;
+  font-weight: bold;
+  word-break: break-word;
+}

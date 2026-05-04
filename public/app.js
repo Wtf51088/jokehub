@@ -2,42 +2,44 @@ let activeCategory = "ყველა";
 let currentUser = null;
 let openComments = new Set();
 
-const socket = io();
+const socket = typeof io !== "undefined" ? io() : null;
 
-socket.on("joke:created", () => loadJokes());
-socket.on("joke:updated", () => loadJokes());
-socket.on("joke:deleted", () => loadJokes());
-socket.on("joke:reacted", () => loadJokes());
-socket.on("profile:updated", () => loadJokes());
+if (socket) {
+  socket.on("joke:created", () => loadJokes());
+  socket.on("joke:updated", () => loadJokes());
+  socket.on("joke:deleted", () => loadJokes());
+  socket.on("joke:reacted", () => loadJokes());
+  socket.on("profile:updated", () => loadJokes());
 
-socket.on("comment:created", data => {
-  const jokeId = Number(data.jokeId);
-  if (openComments.has(jokeId)) {
-    loadComments(jokeId);
-  }
-  refreshJokeStatsOnly(jokeId);
-});
+  socket.on("comment:created", data => {
+    const jokeId = Number(data.jokeId);
+    if (openComments.has(jokeId)) {
+      loadComments(jokeId);
+    }
+    refreshJokeStatsOnly(jokeId);
+  });
 
-socket.on("comment:deleted", data => {
-  const jokeId = Number(data.jokeId);
-  if (openComments.has(jokeId)) {
-    loadComments(jokeId);
-  }
-  refreshJokeStatsOnly(jokeId);
-});
+  socket.on("comment:deleted", data => {
+    const jokeId = Number(data.jokeId);
+    if (openComments.has(jokeId)) {
+      loadComments(jokeId);
+    }
+    refreshJokeStatsOnly(jokeId);
+  });
 
-socket.on("report:created", () => {
-  if (currentUser && currentUser.role === "admin") {
-    loadJokes();
-    if (!document.getElementById("adminPage").classList.contains("hidden")) loadAdminPanel();
-  }
-});
+  socket.on("report:created", () => {
+    if (currentUser && currentUser.role === "admin") {
+      loadJokes();
+      if (!document.getElementById("adminPage").classList.contains("hidden")) loadAdminPanel();
+    }
+  });
 
-socket.on("report:deleted", () => {
-  if (currentUser && currentUser.role === "admin") {
-    if (!document.getElementById("adminPage").classList.contains("hidden")) loadAdminPanel();
-  }
-});
+  socket.on("report:deleted", () => {
+    if (currentUser && currentUser.role === "admin") {
+      if (!document.getElementById("adminPage").classList.contains("hidden")) loadAdminPanel();
+    }
+  });
+}
 
 const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22%3E%3Crect width=%2260%22 height=%2260%22 rx=%2230%22 fill=%22%23ff9fd0%22/%3E%3Ctext x=%2230%22 y=%2238%22 text-anchor=%22middle%22 font-size=%2228%22%3E😄%3C/text%3E%3C/svg%3E";
 

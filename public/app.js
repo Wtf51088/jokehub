@@ -120,6 +120,21 @@ function showSelectedFileName(inputId, labelId) {
   } else {
     label.textContent = "";
   }
+
+  const bannedBox = document.getElementById("bannedIpsList");
+
+  if (bannedBox) {
+    bannedBox.innerHTML = bannedIps.length === 0
+      ? `<p class="rule">Banned IP ჯერ არ არის.</p>`
+      : bannedIps.map(item => `
+        <div class="ip-log-card">
+          <b>Blocked IP</b>
+          <p>${formatDateTime(item.created_at)}</p>
+          <code>${escapeHTML(item.ip)}</code>
+          <button class="light-btn" onclick="unbanIp('${escapeHTML(item.ip)}')">Unban IP</button>
+        </div>
+      `).join("");
+  }
 }
 
 function showPage(page) {
@@ -670,6 +685,9 @@ async function loadAdminPanel() {
   const ipLogsResponse = await fetch("/api/admin/ip-logs", { headers: authHeaders() });
   const ipLogs = await ipLogsResponse.json();
 
+  const bannedIpsResponse = await fetch("/api/admin/banned-ips", { headers: authHeaders() });
+  const bannedIps = await bannedIpsResponse.json();
+
   document.getElementById("reportsList").innerHTML = reports.length === 0
     ? `<p class="rule">Reports არ არის.</p>`
     : reports.map(report => `
@@ -692,6 +710,13 @@ async function loadAdminPanel() {
           <b>@${escapeHTML(user.username)}</b>
           <p class="role-badge">${user.role}</p>
           <p class="rule">Jokes: ${user.jokesCount} | Comments: ${user.commentsCount}</p>
+          ${user.is_banned ? `<span class="banned-label">BANNED</span>` : ""}
+          ${user.role !== "admin" ? `
+            <div class="admin-action-row">
+              <button class="light-btn" onclick="toggleUserBan(${user.id}, ${!user.is_banned})">${user.is_banned ? "Unban" : "Ban"}</button>
+              <button class="delete-btn" onclick="deleteUser(${user.id})">Delete</button>
+            </div>
+          ` : ""}
         </div>
       </div>
     </div>
@@ -708,6 +733,7 @@ async function loadAdminPanel() {
           <span class="role-badge">${escapeHTML(log.action)}</span>
           <p>${formatDateTime(log.created_at)}</p>
           <code>${escapeHTML(log.ip)}</code>
+          <button class="delete-btn" onclick="banIp('${escapeHTML(log.ip)}')">Ban IP</button>
         </div>
       `).join("");
   }
@@ -718,6 +744,85 @@ async function clearReport(id) {
     method: "DELETE",
     headers: authHeaders()
   });
+  loadAdminPanel();
+}
+
+
+async function banIp(ip) {
+  const reason = prompt("რატომ ბლოკავ ამ IP-ს?", "spam");
+
+  if (reason === null) return;
+
+  const response = await fetch("/api/admin/ban-ip", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
+    },
+    body: JSON.stringify({ ip, reason })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    alert(data.error || "IP ban ვერ მოხერხდა.");
+    return;
+  }
+
+  loadAdminPanel();
+}
+
+async function unbanIp(ip) {
+  const response = await fetch(`/api/admin/ban-ip/${encodeURIComponent(ip)}`, {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    alert(data.error || "IP unblock ვერ მოხერხდა.");
+    return;
+  }
+
+  loadAdminPanel();
+}
+
+async function toggleUserBan(userId, banned) {
+  const response = await fetch(`/api/admin/users/${userId}/ban`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
+    },
+    body: JSON.stringify({ banned })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    alert(data.error || "User ban ვერ მოხერხდა.");
+    return;
+  }
+
+  loadAdminPanel();
+}
+
+async function deleteUser(userId) {
+  if (!confirm("ნამდვილად გინდა ამ user-ის წაშლა?")) return;
+
+  const response = await fetch(`/api/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    alert(data.error || "User delete ვერ მოხერხდა.");
+    return;
+  }
+
   loadAdminPanel();
 }
 

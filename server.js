@@ -383,6 +383,40 @@ app.post('/api/admin/ban-ip-safe', requireAdmin, async (req, res) => {
   res.json({ message: 'IP დაიბლოკა.', bannedIps: result.rows });
 });
 
+
+app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
+  const reports = await pool.query(`
+    SELECT reports.*, jokes.text as joke_text, jokes.username as joke_author, jokes.image as joke_image
+    FROM reports
+    LEFT JOIN jokes ON reports.joke_id = jokes.id
+    ORDER BY reports.id DESC
+  `);
+
+  const users = await pool.query(`
+    SELECT users.id, users.username, users.role, users.avatar, users.is_banned, users.created_at,
+      (SELECT COUNT(*)::int FROM jokes WHERE jokes.user_id = users.id) as "jokesCount",
+      (SELECT COUNT(*)::int FROM comments WHERE comments.user_id = users.id) as "commentsCount"
+    FROM users
+    ORDER BY users.id DESC
+  `);
+
+  const ipLogs = await pool.query(`
+    SELECT id, user_id, username, ip, action, user_agent, created_at
+    FROM ip_logs
+    ORDER BY id DESC
+    LIMIT 100
+  `);
+
+  const bannedIps = await pool.query("SELECT * FROM banned_ips ORDER BY id DESC");
+
+  res.json({
+    reports: reports.rows,
+    users: users.rows,
+    ipLogs: ipLogs.rows,
+    bannedIps: bannedIps.rows
+  });
+});
+
 app.get('*', (req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err, req, res, next)=>{ console.error(err); if(err instanceof multer.MulterError && err.code==='LIMIT_FILE_SIZE') return res.status(400).json({error:'ფოტო ძალიან დიდია. მაქსიმუმ 10MB.'}); res.status(400).json({error: err.message || 'სერვერის შეცდომა.'}); });
 

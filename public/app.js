@@ -5,34 +5,60 @@ let openComments = new Set();
 const socket = typeof io !== "undefined" ? io() : null;
 
 if (socket) {
-  socket.on("joke:created", () => loadJokes());
-  socket.on("joke:updated", () => loadJokes());
-  socket.on("joke:deleted", () => loadJokes());
-  socket.on("joke:reacted", () => loadJokes());
-  socket.on("profile:updated", () => loadJokes());
+  socket.on("joke:created", () => {
+    loadJokes();
+  });
+
+  socket.on("joke:updated", () => {
+    loadJokes();
+  });
+
+  socket.on("joke:deleted", () => {
+    loadJokes();
+  });
+
+  socket.on("joke:reacted", () => {
+    loadJokes();
+  });
+
+  socket.on("profile:updated", () => {
+    loadJokes();
+  });
 
   socket.on("comment:created", data => {
     const jokeId = Number(data.jokeId);
-    if (openComments.has(jokeId)) loadComments(jokeId);
-    refreshJokeStatsOnly(jokeId);
+
+    if (openComments.has(jokeId)) {
+      loadComments(jokeId);
+      refreshJokeStatsOnly(jokeId);
+    } else {
+      refreshJokeStatsOnly(jokeId);
+    }
   });
 
   socket.on("comment:deleted", data => {
     const jokeId = Number(data.jokeId);
-    if (openComments.has(jokeId)) loadComments(jokeId);
-    refreshJokeStatsOnly(jokeId);
+
+    if (openComments.has(jokeId)) {
+      loadComments(jokeId);
+      refreshJokeStatsOnly(jokeId);
+    }
   });
 
   socket.on("report:created", () => {
     if (currentUser && currentUser.role === "admin") {
+      if (!document.getElementById("adminPage").classList.contains("hidden")) {
+        loadAdminPanel();
+      }
       loadJokes();
-      if (!document.getElementById("adminPage").classList.contains("hidden")) loadAdminPanel();
     }
   });
 
   socket.on("report:deleted", () => {
     if (currentUser && currentUser.role === "admin") {
-      if (!document.getElementById("adminPage").classList.contains("hidden")) loadAdminPanel();
+      if (!document.getElementById("adminPage").classList.contains("hidden")) {
+        loadAdminPanel();
+      }
     }
   });
 }
@@ -93,6 +119,23 @@ function showSelectedFileName(inputId, labelId) {
     label.textContent = "არჩეულია: " + input.files[0].name;
   } else {
     label.textContent = "";
+  }
+
+  const bannedBox = document.getElementById("bannedIpsList");
+
+  if (bannedBox) {
+    bannedBox.innerHTML = bannedIpsError
+      ? `<p class="error">${escapeHTML(bannedIpsError)}</p>`
+      : bannedIps.length === 0
+      ? `<p class="rule">Banned IP ჯერ არ არის.</p>`
+      : bannedIps.map(item => `
+        <div class="ip-log-card">
+          <b>Blocked IP</b>
+          <p>${formatDateTime(item.created_at)}</p>
+          <code>${escapeHTML(item.ip)}</code>
+          <button class="light-btn" onclick="unbanIp('${escapeHTML(item.ip)}')">Unban IP</button>
+        </div>
+      `).join("");
   }
 }
 
@@ -260,7 +303,7 @@ async function loadJokes() {
 function renderJokes(jokes) {
   const list = document.getElementById("jokesList");
 
-  if (!Array.isArray(jokes) || jokes.length === 0) {
+  if (jokes.length === 0) {
     list.innerHTML = '<div class="empty">ხუმრობა ვერ მოიძებნა 😢</div>';
     return;
   }
@@ -475,7 +518,7 @@ async function loadComments(id) {
   const comments = await response.json();
   const list = document.getElementById(`commentsList-${id}`);
 
-  if (!Array.isArray(comments) || comments.length === 0) {
+  if (comments.length === 0) {
     list.innerHTML = `<p class="rule">კომენტარები ჯერ არ არის.</p>`;
     return;
   }
@@ -497,7 +540,7 @@ async function refreshJokeStatsOnly(id) {
   const url = `/api/jokes?search=${encodeURIComponent(search)}&category=${encodeURIComponent(activeCategory)}&sort=${encodeURIComponent(sort)}`;
   const response = await fetch(url, { headers: authHeaders() });
   const jokes = await response.json();
-  const joke = Array.isArray(jokes) ? jokes.find(item => item.id === id) : null;
+  const joke = jokes.find(item => item.id === id);
 
   if (!joke) return;
 
@@ -635,36 +678,24 @@ async function loadAdminPanel() {
     return;
   }
 
-  const reportsResponse = await fetch("/api/admin/reports", { headers: authHeaders() });
-  const reports = await reportsResponse.json();
-
-  const usersResponse = await fetch("/api/admin/users", { headers: authHeaders() });
-  const users = await usersResponse.json();
-
-  const ipLogsResponse = await fetch("/api/admin/ip-logs", { headers: authHeaders() });
-  const ipLogs = await ipLogsResponse.json();
-
-  let bannedIps = [];
-  let bannedIpsError = "";
-
-  try {
-    const bannedIpsResponse = await fetch("/api/admin/banned-ips", {
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders()
-      }
-    });
-
-    const bannedIpsData = await bannedIpsResponse.json();
-
-    if (bannedIpsResponse.ok && Array.isArray(bannedIpsData)) {
-      bannedIps = bannedIpsData;
-    } else {
-      bannedIpsError = bannedIpsData.error || "Banned IPs ვერ ჩაიტვირთა.";
+  const response = await fetch("/api/admin/dashboard", {
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
     }
-  } catch (error) {
-    bannedIpsError = "Banned IPs ვერ ჩაიტვირთა.";
+  });
+
+  const dashboard = await response.json();
+
+  if (!response.ok) {
+    document.getElementById("reportsList").innerHTML = `<p class="error">${escapeHTML(dashboard.error || "Admin Panel ვერ ჩაიტვირთა.")}</p>`;
+    return;
   }
+
+  const reports = dashboard.reports || [];
+  const users = dashboard.users || [];
+  const ipLogs = dashboard.ipLogs || [];
+  const bannedIps = dashboard.bannedIps || [];
 
   document.getElementById("reportsList").innerHTML = reports.length === 0
     ? `<p class="rule">Reports არ არის.</p>`
@@ -719,9 +750,7 @@ async function loadAdminPanel() {
   const bannedBox = document.getElementById("bannedIpsList");
 
   if (bannedBox) {
-    bannedBox.innerHTML = bannedIpsError
-      ? `<p class="error">${escapeHTML(bannedIpsError)}</p>`
-      : bannedIps.length === 0
+    bannedBox.innerHTML = bannedIps.length === 0
       ? `<p class="rule">Banned IP ჯერ არ არის.</p>`
       : bannedIps.map(item => `
         <div class="ip-log-card">
@@ -741,6 +770,7 @@ async function clearReport(id) {
   });
   loadAdminPanel();
 }
+
 
 async function banIp(ip) {
   const reason = prompt("რატომ ბლოკავ ამ IP-ს?", "spam");
@@ -849,5 +879,17 @@ function scrollToPost() {
   document.getElementById("post").scrollIntoView({ behavior: "smooth" });
 }
 
+async function refreshVisibleData() {
+  if (!document.getElementById("homePage").classList.contains("hidden")) {
+    await loadJokes();
+    openComments.forEach(jokeId => loadComments(jokeId));
+  }
+
+  if (currentUser && currentUser.role === "admin" && !document.getElementById("adminPage").classList.contains("hidden")) {
+    loadAdminPanel();
+  }
+}
+
 changeDailyJoke();
 checkMe().then(loadJokes);
+

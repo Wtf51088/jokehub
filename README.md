@@ -57,13 +57,11 @@ ADMIN_PASSWORD
 ძველი SQLite database ავტომატურად არ გადმოვა Neon-ში. ეს არის ახალი სუფთა ვერსია.
 
 
-## Real-time upgrade
+## Stable refresh upgrade
+
+ეს ვერსია Socket.IO-ს არ იყენებს, ამიტომ Render-ზე უფრო სტაბილურია.
 
 დამატებულია:
-
-- real-time posts
-- real-time comments
-- real-time reactions
-- real-time admin report updates
+- posts/comments auto-refresh ყოველ 5 წამში
 - ფოტოს არჩევისას ფაილის სახელის ჩვენება
 - upload ლიმიტი 10MB

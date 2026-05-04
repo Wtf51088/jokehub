@@ -124,7 +124,9 @@ function showSelectedFileName(inputId, labelId) {
   const bannedBox = document.getElementById("bannedIpsList");
 
   if (bannedBox) {
-    bannedBox.innerHTML = bannedIps.length === 0
+    bannedBox.innerHTML = bannedIpsError
+      ? `<p class="error">${escapeHTML(bannedIpsError)}</p>`
+      : bannedIps.length === 0
       ? `<p class="rule">Banned IP ჯერ არ არის.</p>`
       : bannedIps.map(item => `
         <div class="ip-log-card">
@@ -686,16 +688,19 @@ async function loadAdminPanel() {
   const ipLogs = await ipLogsResponse.json();
 
   let bannedIps = [];
+  let bannedIpsError = "";
 
   try {
     const bannedIpsResponse = await fetch("/api/admin/banned-ips", { headers: authHeaders() });
-    bannedIps = await bannedIpsResponse.json();
+    const bannedIpsData = await bannedIpsResponse.json();
 
-    if (!Array.isArray(bannedIps)) {
-      bannedIps = [];
+    if (bannedIpsResponse.ok && Array.isArray(bannedIpsData)) {
+      bannedIps = bannedIpsData;
+    } else {
+      bannedIpsError = bannedIpsData.error || "Banned IPs ვერ ჩაიტვირთა.";
     }
   } catch (error) {
-    bannedIps = [];
+    bannedIpsError = "Banned IPs ვერ ჩაიტვირთა.";
   }
 
   document.getElementById("reportsList").innerHTML = reports.length === 0
@@ -763,7 +768,7 @@ async function banIp(ip) {
 
   if (reason === null) return;
 
-  const response = await fetch("/api/admin/ban-ip", {
+  const response = await fetch("/api/admin/ban-ip-safe", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -783,9 +788,13 @@ async function banIp(ip) {
 }
 
 async function unbanIp(ip) {
-  const response = await fetch(`/api/admin/ban-ip/${encodeURIComponent(ip)}`, {
-    method: "DELETE",
-    headers: authHeaders()
+  const response = await fetch("/api/admin/unban-ip", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
+    },
+    body: JSON.stringify({ ip })
   });
 
   const data = await response.json();

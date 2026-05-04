@@ -186,7 +186,10 @@ async function blockBannedIp(req, res, next) {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname,'public')));
-app.use('/api', blockBannedIp);
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/admin')) return next();
+  return blockBannedIp(req, res, next);
+});
 
 app.post('/api/register', async (req,res,next)=>{ try{
   const username = String(req.body.username || '').trim(); const password = req.body.password || '';
@@ -350,6 +353,34 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
   await pool.query("DELETE FROM users WHERE id = $1", [userId]);
   res.json({ message: 'User წაიშალა.' });
+});
+
+
+app.post('/api/admin/unban-ip', requireAdmin, async (req, res) => {
+  const { ip } = req.body;
+
+  if (!ip || ip.trim().length < 3) {
+    return res.status(400).json({ error: 'IP არასწორია.' });
+  }
+
+  await pool.query("DELETE FROM banned_ips WHERE ip = $1", [ip.trim()]);
+  res.json({ message: 'IP ban მოიხსნა.' });
+});
+
+app.post('/api/admin/ban-ip-safe', requireAdmin, async (req, res) => {
+  const { ip, reason } = req.body;
+
+  if (!ip || ip.trim().length < 3) {
+    return res.status(400).json({ error: 'IP არასწორია.' });
+  }
+
+  await pool.query(
+    "INSERT INTO banned_ips (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO UPDATE SET reason = EXCLUDED.reason",
+    [ip.trim(), reason || null]
+  );
+
+  const result = await pool.query("SELECT * FROM banned_ips ORDER BY id DESC");
+  res.json({ message: 'IP დაიბლოკა.', bannedIps: result.rows });
 });
 
 app.get('*', (req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));

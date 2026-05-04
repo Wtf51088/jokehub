@@ -43,7 +43,6 @@ function getCategoryEmoji(category) {
   return "😂";
 }
 
-
 function showSelectedFileName(inputId, labelId) {
   const input = document.getElementById(inputId);
   const label = document.getElementById(labelId);
@@ -201,8 +200,13 @@ async function uploadAvatar() {
 }
 
 async function loadJokes() {
-  const search = document.getElementById("searchInput").value;
-  const sort = document.getElementById("sortInput").value;
+  const searchInput = document.getElementById("searchInput");
+  const sortInput = document.getElementById("sortInput");
+
+  if (!searchInput || !sortInput) return;
+
+  const search = searchInput.value;
+  const sort = sortInput.value;
 
   const url = `/api/jokes?search=${encodeURIComponent(search)}&category=${encodeURIComponent(activeCategory)}&sort=${encodeURIComponent(sort)}`;
 
@@ -221,78 +225,87 @@ function renderJokes(jokes) {
     return;
   }
 
-  list.innerHTML = jokes.map(joke => `
-    <div class="joke-card" id="joke-${joke.id}">
-      <div class="user-row">
-        <div class="user">
-          <img class="small-avatar" src="${joke.avatar || defaultAvatar}" />
-          <a onclick="openProfile('${escapeHTML(joke.username)}')">@${escapeHTML(joke.username)}</a>
-          ${joke.isAdminView && joke.canEdit ? '<span class="admin-mark">admin control</span>' : ''}
+  list.innerHTML = jokes.map(joke => {
+    const imageHtml = joke.image ? `<img class="joke-image" src="${escapeHTML(joke.image)}" />` : "";
+    const adminReportHtml = joke.isAdminView ? `<span>🚩 ${joke.reportsCount}</span>` : "";
+    const ownerButtons = joke.canEdit ? `
+      <button class="owner-btn" onclick="showEditBox(${joke.id})">რედაქტირება</button>
+      <button class="delete-btn" onclick="deleteJoke(${joke.id})">წაშლა</button>
+    ` : "";
+
+    return `
+      <div class="joke-card" id="joke-${joke.id}" data-text="${escapeHTML(joke.text)}" data-category="${escapeHTML(joke.category)}">
+        <div class="user-row">
+          <div class="user">
+            <img class="small-avatar" src="${joke.avatar || defaultAvatar}" />
+            <a onclick="openProfile('${escapeHTML(joke.username)}')">@${escapeHTML(joke.username)}</a>
+            ${joke.isAdminView && joke.canEdit ? '<span class="admin-mark">admin control</span>' : ''}
+          </div>
+          <div class="date">${formatDate(joke.created_at)}</div>
         </div>
-        <div class="date">${formatDate(joke.created_at)}</div>
+
+        <div class="joke-text">${escapeHTML(joke.text)}</div>
+
+        ${imageHtml}
+
+        <div class="tags">
+          <span>${getCategoryEmoji(joke.category)} ${escapeHTML(joke.category)}</span>
+          <span>💬 ${joke.commentsCount}</span>
+          ${adminReportHtml}
+        </div>
+
+        <div class="reactions">
+          <button onclick="react(${joke.id}, 'laughs')">😂 ${joke.laughs}</button>
+          <button onclick="react(${joke.id}, 'dead')">💀 ${joke.dead}</button>
+          <button onclick="react(${joke.id}, 'hmm')">🤨 ${joke.hmm}</button>
+          <button onclick="toggleComments(${joke.id})">კომენტარები</button>
+          <button class="report-btn" onclick="showReportBox(${joke.id})">Report</button>
+          ${ownerButtons}
+        </div>
+
+        <div class="report-box hidden" id="report-${joke.id}">
+          <input type="text" id="reportReason-${joke.id}" placeholder="რატომ არ მოგწონს ეს პოსტი?" />
+          <button class="btn small-btn" onclick="sendReport(${joke.id})">გაგზავნა</button>
+          <button class="light-btn" onclick="hideReportBox(${joke.id})">გაუქმება</button>
+          <p class="error" id="reportError-${joke.id}"></p>
+        </div>
+
+        <div class="edit-box hidden" id="edit-${joke.id}">
+          <textarea id="editText-${joke.id}"></textarea>
+          <select id="editCategory-${joke.id}">
+            <option value="სტუდენტური">🎓 სტუდენტური</option>
+            <option value="IT">💻 IT</option>
+            <option value="ყოველდღიური">🚌 ყოველდღიური</option>
+            <option value="შავი იუმორი">🖤 შავი იუმორი</option>
+            <option value="აბსურდული">🐸 აბსურდული</option>
+          </select>
+          <label class="file-label">
+            შეცვალე ფოტო
+            <input type="file" id="editImage-${joke.id}" accept="image/png,image/jpeg,image/webp,image/gif" onchange="showSelectedFileName('editImage-${joke.id}', 'editImageName-${joke.id}')" />
+            <span id="editImageName-${joke.id}" class="selected-file"></span>
+          </label>
+          <label class="rule"><input type="checkbox" id="removeImage-${joke.id}" /> ფოტოს წაშლა</label>
+          <button class="btn small-btn" onclick="saveEdit(${joke.id})">შენახვა</button>
+          <button class="light-btn" onclick="hideEditBox(${joke.id})">გაუქმება</button>
+          <p class="error" id="editError-${joke.id}"></p>
+        </div>
+
+        <div class="comments-section hidden" id="comments-${joke.id}">
+          <div id="commentsList-${joke.id}"></div>
+          <textarea id="commentInput-${joke.id}" placeholder="დაწერე კომენტარი..."></textarea>
+          <button class="btn small-btn" onclick="addComment(${joke.id})">კომენტარის დამატება</button>
+          <p class="error" id="commentError-${joke.id}"></p>
+        </div>
       </div>
-
-      <div class="joke-text">${escapeHTML(joke.text)}</div>
-
-      ${joke.image ? `<img class="joke-image" src="${escapeHTML(joke.image)}" />` : ""}
-
-      <div class="tags">
-        <span>${getCategoryEmoji(joke.category)} ${escapeHTML(joke.category)}</span>
-        <span>💬 ${joke.commentsCount}</span>
-        ${joke.isAdminView ? `<span>🚩 ${joke.reportsCount}</span>` : ""}
-      </div>
-
-      <div class="reactions">
-        <button onclick="react(${joke.id}, 'laughs')">😂 ${joke.laughs}</button>
-        <button onclick="react(${joke.id}, 'dead')">💀 ${joke.dead}</button>
-        <button onclick="react(${joke.id}, 'hmm')">🤨 ${joke.hmm}</button>
-        <button onclick="toggleComments(${joke.id})">კომენტარები</button>
-        <button class="report-btn" onclick="showReportBox(${joke.id})">Report</button>
-        ${joke.canEdit ? `
-          <button class="owner-btn" onclick="showEditBox(${joke.id}, '${encodeURIComponent(joke.text)}', '${encodeURIComponent(joke.category)}')">რედაქტირება</button>
-          <button class="delete-btn" onclick="deleteJoke(${joke.id})">წაშლა</button>
-        ` : ""}
-      </div>
-
-      <div class="report-box hidden" id="report-${joke.id}">
-        <input type="text" id="reportReason-${joke.id}" placeholder="რატომ არ მოგწონს ეს პოსტი?" />
-        <button class="btn small-btn" onclick="sendReport(${joke.id})">გაგზავნა</button>
-        <button class="light-btn" onclick="hideReportBox(${joke.id})">გაუქმება</button>
-        <p class="error" id="reportError-${joke.id}"></p>
-      </div>
-
-      <div class="edit-box hidden" id="edit-${joke.id}">
-        <textarea id="editText-${joke.id}"></textarea>
-        <select id="editCategory-${joke.id}">
-          <option value="სტუდენტური">🎓 სტუდენტური</option>
-          <option value="IT">💻 IT</option>
-          <option value="ყოველდღიური">🚌 ყოველდღიური</option>
-          <option value="შავი იუმორი">🖤 შავი იუმორი</option>
-          <option value="აბსურდული">🐸 აბსურდული</option>
-        </select>
-        <label class="file-label">
-          შეცვალე ფოტო
-          <input type="file" id="editImage-${joke.id}" accept="image/png,image/jpeg,image/webp,image/gif" onchange="showSelectedFileName(`editImage-${joke.id}`, `editImageName-${joke.id}`)" />\n          <span id="editImageName-${joke.id}" class="selected-file"></span>
-        </label>
-        <label class="rule"><input type="checkbox" id="removeImage-${joke.id}" /> ფოტოს წაშლა</label>
-        <button class="btn small-btn" onclick="saveEdit(${joke.id})">შენახვა</button>
-        <button class="light-btn" onclick="hideEditBox(${joke.id})">გაუქმება</button>
-        <p class="error" id="editError-${joke.id}"></p>
-      </div>
-
-      <div class="comments-section hidden" id="comments-${joke.id}">
-        <div id="commentsList-${joke.id}"></div>
-        <textarea id="commentInput-${joke.id}" placeholder="დაწერე კომენტარი..."></textarea>
-        <button class="btn small-btn" onclick="addComment(${joke.id})">კომენტარის დამატება</button>
-        <p class="error" id="commentError-${joke.id}"></p>
-      </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
-function showEditBox(id, encodedText, encodedCategory) {
-  const text = decodeURIComponent(encodedText);
-  const category = decodeURIComponent(encodedCategory);
+function showEditBox(id) {
+  const card = document.getElementById(`joke-${id}`);
+  const text = card.dataset.text;
+  const category = card.dataset.category;
+
   document.getElementById(`edit-${id}`).classList.remove("hidden");
   document.getElementById(`editText-${id}`).value = text;
   document.getElementById(`editCategory-${id}`).value = category;
@@ -376,12 +389,7 @@ async function react(id, type) {
     body: JSON.stringify({ type })
   });
 
-  let data = {};
-  try {
-    data = await response.json();
-  } catch (error) {
-    data = {};
-  }
+  const data = await response.json();
 
   if (!response.ok) {
     alert(data.error || "Reaction-ის დასადებად ჯერ შედი ანგარიშში.");
@@ -442,7 +450,6 @@ async function loadComments(id) {
     </div>
   `).join("");
 }
-
 
 async function refreshJokeStatsOnly(id) {
   const search = document.getElementById("searchInput").value;
@@ -655,10 +662,6 @@ function scrollToPost() {
   document.getElementById("post").scrollIntoView({ behavior: "smooth" });
 }
 
-changeDailyJoke();
-checkMe().then(loadJokes);
-
-
 async function refreshVisibleData() {
   if (!document.getElementById("homePage").classList.contains("hidden")) {
     await loadJokes();
@@ -670,4 +673,6 @@ async function refreshVisibleData() {
   }
 }
 
+changeDailyJoke();
+checkMe().then(loadJokes);
 setInterval(refreshVisibleData, 5000);

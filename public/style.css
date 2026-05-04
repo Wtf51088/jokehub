@@ -529,3 +529,30 @@ footer {
   font-weight: bold;
   word-break: break-word;
 }
+
+
+.ip-title {
+  margin-top: 25px;
+}
+
+.ip-log-card {
+  background: #f8f8ff;
+  border-radius: 18px;
+  padding: 14px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #444;
+}
+
+.ip-log-card b {
+  color: #ff4fa3;
+}
+
+.ip-log-card code {
+  display: block;
+  background: #fff;
+  padding: 8px;
+  border-radius: 10px;
+  margin-top: 7px;
+  word-break: break-all;
+}

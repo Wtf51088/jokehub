@@ -95,6 +95,11 @@ function formatDate(dateText) {
   return date.toLocaleDateString("ka-GE");
 }
 
+function formatDateTime(dateText) {
+  const date = new Date(dateText);
+  return date.toLocaleString("ka-GE");
+}
+
 function getCategoryEmoji(category) {
   if (category === "სტუდენტური") return "🎓";
   if (category === "IT") return "💻";
@@ -662,6 +667,9 @@ async function loadAdminPanel() {
   const usersResponse = await fetch("/api/admin/users", { headers: authHeaders() });
   const users = await usersResponse.json();
 
+  const ipLogsResponse = await fetch("/api/admin/ip-logs", { headers: authHeaders() });
+  const ipLogs = await ipLogsResponse.json();
+
   document.getElementById("reportsList").innerHTML = reports.length === 0
     ? `<p class="rule">Reports არ არის.</p>`
     : reports.map(report => `
@@ -688,6 +696,21 @@ async function loadAdminPanel() {
       </div>
     </div>
   `).join("");
+
+  const ipBox = document.getElementById("ipLogsList");
+
+  if (ipBox) {
+    ipBox.innerHTML = ipLogs.length === 0
+      ? `<p class="rule">IP logs ჯერ არ არის.</p>`
+      : ipLogs.map(log => `
+        <div class="ip-log-card">
+          <b>@${escapeHTML(log.username || "guest")}</b>
+          <span class="role-badge">${escapeHTML(log.action)}</span>
+          <p>${formatDateTime(log.created_at)}</p>
+          <code>${escapeHTML(log.ip)}</code>
+        </div>
+      `).join("");
+  }
 }
 
 async function clearReport(id) {

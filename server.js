@@ -9,8 +9,24 @@ const { Pool } = require('pg');
 const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
 
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
+
 const PORT = process.env.PORT || 3000;
+
+io.on("connection", socket => {
+  console.log("Client connected:", socket.id);
+});
+
+function broadcast(event, data = {}) {
+  io.emit(event, data);
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -25,7 +41,7 @@ cloudinary.config({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter(req, file, cb) {
     if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.mimetype)) {
       return cb(new Error('შეიძლება მხოლოდ jpg, png, webp ან gif.'));
@@ -168,7 +184,8 @@ app.patch('/api/jokes/:id/react', requireUser, async (req,res,next)=>{ const cli
   if(old.rowCount && old.rows[0].type === type){ await client.query('ROLLBACK'); return res.status(400).json({error:'ამ reaction-ზე უკვე დაჭერილი გაქვს.'}); }
   if(old.rowCount){ const oldType = old.rows[0].type; await client.query(`UPDATE jokes SET ${oldType}=GREATEST(${oldType}-1,0) WHERE id=$1`,[id]); await client.query('UPDATE reactions SET type=$1 WHERE joke_id=$2 AND user_id=$3',[type,id,req.user.id]); }
   else await client.query('INSERT INTO reactions (joke_id,user_id,type) VALUES ($1,$2,$3)',[id,req.user.id,type]);
-  await client.query(`UPDATE jokes SET ${type}=${type}+1 WHERE id=$1`,[id]); await client.query('COMMIT'); const updated = await pool.query('SELECT * FROM jokes WHERE id=$1',[id]); res.json(updated.rows[0]);
+  await client.query(`UPDATE jokes SET ${type}=${type}+1 WHERE id=$1`,[id]); await client.query('COMMIT'); const updated = await pool.query('SELECT * FROM jokes WHERE id=$1',[id]); broadcast("joke:reacted", updated.rows[0]);
+    res.json(updated.rows[0]);
 } catch(e){ await client.query('ROLLBACK').catch(()=>{}); next(e); } finally { client.release(); } });
 
 app.delete('/api/jokes/:id', requireUser, async (req,res,next)=>{ try{ const r=await pool.query('SELECT * FROM jokes WHERE id=$1',[req.params.id]); const joke=r.rows[0]; if(!joke) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); if(!canManageJoke(req.user,joke)) return res.status(403).json({error:'შეგიძლია წაშალო მხოლოდ შენი ხუმრობა. admin-ს შეუძლია ყველა.'}); await deleteCloud(joke.image); await pool.query('DELETE FROM jokes WHERE id=$1',[req.params.id]); res.json({message:'ხუმრობა წაიშალა.'}); } catch(e){next(e)} });
@@ -184,6 +201,6 @@ app.get('/api/admin/users', requireAdmin, async (req,res,next)=>{ try{ const r=a
 app.get('/api/stats', async (req,res,next)=>{ try{ const tj=await pool.query('SELECT COUNT(*) FROM jokes'); const tl=await pool.query('SELECT COALESCE(SUM(laughs),0) AS total FROM jokes'); const tc=await pool.query('SELECT category, COUNT(*) FROM jokes GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1'); res.json({totalJokes:+tj.rows[0].count,totalLaughs:+tl.rows[0].total,topCategory:tc.rows[0]?tc.rows[0].category:'-'}); } catch(e){next(e)} });
 
 app.get('*', (req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
-app.use((err, req, res, next)=>{ console.error(err); if(err instanceof multer.MulterError && err.code==='LIMIT_FILE_SIZE') return res.status(400).json({error:'ფოტო ძალიან დიდია. მაქსიმუმ 2MB.'}); res.status(400).json({error: err.message || 'სერვერის შეცდომა.'}); });
+app.use((err, req, res, next)=>{ console.error(err); if(err instanceof multer.MulterError && err.code==='LIMIT_FILE_SIZE') return res.status(400).json({error:'ფოტო ძალიან დიდია. მაქსიმუმ 10MB.'}); res.status(400).json({error: err.message || 'სერვერის შეცდომა.'}); });
 
 initDb().then(()=>app.listen(PORT,()=>console.log(`JokeHub running on port ${PORT}`))).catch(e=>{ console.error('Database initialization failed:', e); process.exit(1); });

@@ -55,3 +55,15 @@ ADMIN_PASSWORD
 ## მნიშვნელოვანი
 
 ძველი SQLite database ავტომატურად არ გადმოვა Neon-ში. ეს არის ახალი სუფთა ვერსია.
+
+
+## Real-time upgrade
+
+დამატებულია:
+
+- real-time posts
+- real-time comments
+- real-time reactions
+- real-time admin report updates
+- ფოტოს არჩევისას ფაილის სახელის ჩვენება
+- upload ლიმიტი 10MB

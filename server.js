@@ -87,6 +87,19 @@ async function initDb() {
   await pool.query(`CREATE TABLE IF NOT EXISTS reports (id SERIAL PRIMARY KEY, joke_id INTEGER REFERENCES jokes(id) ON DELETE CASCADE, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, reason TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(joke_id,user_id))`);
   await pool.query(`CREATE TABLE IF NOT EXISTS reactions (id SERIAL PRIMARY KEY, joke_id INTEGER REFERENCES jokes(id) ON DELETE CASCADE, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, type TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(joke_id,user_id))`);
 
+  
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ip_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      username TEXT,
+      ip TEXT NOT NULL,
+      action TEXT NOT NULL,
+      user_agent TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin1234';
   const admin = await pool.query('SELECT id FROM users WHERE username=$1', [adminUsername]);
@@ -155,7 +168,7 @@ app.post('/api/register', async (req,res,next)=>{ try{
   const token = makeToken();
   const r = await pool.query('INSERT INTO users (username,password_hash,role,token) VALUES ($1,$2,$3,$4) RETURNING id,username,role,avatar', [username,hashPassword(password),'user',token]);
   const newUser = {...r.rows[0], token};
-  await logIp(req, newUser, "register");
+  await logIp(req, newUser, 'register');
   res.status(201).json(newUser);
 } catch(e){next(e)} });
 
@@ -229,6 +242,23 @@ app.get('/api/admin/reports', requireAdmin, async (req,res,next)=>{ try{ const r
 app.delete('/api/admin/reports/:id', requireAdmin, async (req,res,next)=>{ try{ await pool.query('DELETE FROM reports WHERE id=$1',[req.params.id]); broadcast('report:deleted', { id: Number(req.params.id) }); res.json({message:'Report წაიშალა.'}); } catch(e){next(e)} });
 app.get('/api/admin/users', requireAdmin, async (req,res,next)=>{ try{ const r=await pool.query('SELECT users.id,users.username,users.role,users.avatar,users.created_at,(SELECT COUNT(*)::int FROM jokes WHERE jokes.user_id=users.id) AS "jokesCount",(SELECT COUNT(*)::int FROM comments WHERE comments.user_id=users.id) AS "commentsCount" FROM users ORDER BY users.id DESC'); res.json(r.rows); } catch(e){next(e)} });
 app.get('/api/stats', async (req,res,next)=>{ try{ const tj=await pool.query('SELECT COUNT(*) FROM jokes'); const tl=await pool.query('SELECT COALESCE(SUM(laughs),0) AS total FROM jokes'); const tc=await pool.query('SELECT category, COUNT(*) FROM jokes GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1'); res.json({totalJokes:+tj.rows[0].count,totalLaughs:+tl.rows[0].total,topCategory:tc.rows[0]?tc.rows[0].category:'-'}); } catch(e){next(e)} });
+
+
+app.get('/api/admin/ip-logs', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, user_id, username, ip, action, user_agent, created_at
+      FROM ip_logs
+      ORDER BY id DESC
+      LIMIT 100
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'IP logs ვერ მოიძებნა' });
+  }
+});
 
 app.get('*', (req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err, req, res, next)=>{ console.error(err); if(err instanceof multer.MulterError && err.code==='LIMIT_FILE_SIZE') return res.status(400).json({error:'ფოტო ძალიან დიდია. მაქსიმუმ 10MB.'}); res.status(400).json({error: err.message || 'სერვერის შეცდომა.'}); });

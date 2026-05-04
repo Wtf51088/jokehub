@@ -140,13 +140,14 @@ async function requireAdmin(req,res,next) { const u = await getUser(req); if(!u 
 
 
 function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
+  const forwarded = req.headers["x-forwarded-for"] || req.headers["cf-connecting-ip"] || req.headers["x-real-ip"];
+  let ip = forwarded ? String(forwarded).split(",")[0].trim() : req.socket.remoteAddress;
 
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+  if (ip && ip.startsWith("::ffff:")) {
+    ip = ip.replace("::ffff:", "");
   }
 
-  return req.socket.remoteAddress || "unknown";
+  return ip || "unknown";
 }
 
 async function logIp(req, user, action) {

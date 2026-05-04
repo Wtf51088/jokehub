@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
@@ -10,7 +12,20 @@ const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
 
 const app = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*" }
+});
+
 const PORT = process.env.PORT || 3000;
+
+io.on("connection", socket => {
+  console.log("Socket connected:", socket.id);
+});
+
+function broadcast(event, data = {}) {
+  io.emit(event, data);
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -123,7 +138,7 @@ app.post('/api/login', async (req,res,next)=>{ try{
 
 app.get('/api/me', async (req,res,next)=>{ try{ const u=await getUser(req); res.json(u?publicUser(u):null); } catch(e){next(e)} });
 app.post('/api/logout', requireUser, async (req,res,next)=>{ try{ await pool.query('UPDATE users SET token=NULL WHERE id=$1',[req.user.id]); res.json({message:'გამოხვედი ანგარიშიდან.'}); } catch(e){next(e)} });
-app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req,res,next)=>{ try{ if(!req.file) return res.status(400).json({error:'ფოტო არ აირჩიე.'}); if(req.user.avatar) await deleteCloud(req.user.avatar); const avatar = await uploadCloud(req.file,'jokehub/avatars'); await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[avatar,req.user.id]); res.json({avatar}); } catch(e){next(e)} });
+app.post('/api/profile/avatar', requireUser, upload.single('avatar'), async (req,res,next)=>{ try{ if(!req.file) return res.status(400).json({error:'ფოტო არ აირჩიე.'}); if(req.user.avatar) await deleteCloud(req.user.avatar); const avatar = await uploadCloud(req.file,'jokehub/avatars'); await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[avatar,req.user.id]); broadcast('profile:updated', { userId: req.user.id, username: req.user.username, avatar }); res.json({avatar}); } catch(e){next(e)} });
 
 app.get('/api/users/:username', async (req,res,next)=>{ try{
   const u = await pool.query('SELECT id,username,role,avatar,created_at FROM users WHERE username=$1',[req.params.username]);
@@ -148,6 +163,7 @@ app.post('/api/jokes', requireUser, upload.single('image'), async (req,res,next)
   const allowed=['სტუდენტური','IT','ყოველდღიური','შავი იუმორი','აბსურდული']; if(!allowed.includes(category)) return res.status(400).json({error:'არასწორი კატეგორია.'});
   const image = req.file ? await uploadCloud(req.file,'jokehub/jokes') : null;
   const r = await pool.query('INSERT INTO jokes (user_id,username,text,category,image) VALUES ($1,$2,$3,$4,$5) RETURNING *',[req.user.id,req.user.username,text.trim(),category,image]);
+  broadcast('joke:created', r.rows[0]);
   res.status(201).json({...r.rows[0], canEdit:true});
 } catch(e){next(e)} });
 
@@ -158,6 +174,7 @@ app.put('/api/jokes/:id', requireUser, upload.single('image'), async (req,res,ne
   const allowed=['სტუდენტური','IT','ყოველდღიური','შავი იუმორი','აბსურდული']; if(!allowed.includes(category)) return res.status(400).json({error:'არასწორი კატეგორია.'});
   let image = joke.image; if(removeImage === 'true'){ await deleteCloud(joke.image); image=null; } if(req.file){ await deleteCloud(joke.image); image = await uploadCloud(req.file,'jokehub/jokes'); }
   const r = await pool.query('UPDATE jokes SET text=$1, category=$2, image=$3 WHERE id=$4 RETURNING *',[text.trim(),category,image,req.params.id]);
+  broadcast('joke:updated', r.rows[0]);
   res.json({...r.rows[0], canEdit:true});
 } catch(e){next(e)} });
 
@@ -171,19 +188,19 @@ app.patch('/api/jokes/:id/react', requireUser, async (req,res,next)=>{ const cli
   await client.query(`UPDATE jokes SET ${type}=${type}+1 WHERE id=$1`,[id]); await client.query('COMMIT'); const updated = await pool.query('SELECT * FROM jokes WHERE id=$1',[id]); res.json(updated.rows[0]);
 } catch(e){ await client.query('ROLLBACK').catch(()=>{}); next(e); } finally { client.release(); } });
 
-app.delete('/api/jokes/:id', requireUser, async (req,res,next)=>{ try{ const r=await pool.query('SELECT * FROM jokes WHERE id=$1',[req.params.id]); const joke=r.rows[0]; if(!joke) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); if(!canManageJoke(req.user,joke)) return res.status(403).json({error:'შეგიძლია წაშალო მხოლოდ შენი ხუმრობა. admin-ს შეუძლია ყველა.'}); await deleteCloud(joke.image); await pool.query('DELETE FROM jokes WHERE id=$1',[req.params.id]); res.json({message:'ხუმრობა წაიშალა.'}); } catch(e){next(e)} });
+app.delete('/api/jokes/:id', requireUser, async (req,res,next)=>{ try{ const r=await pool.query('SELECT * FROM jokes WHERE id=$1',[req.params.id]); const joke=r.rows[0]; if(!joke) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); if(!canManageJoke(req.user,joke)) return res.status(403).json({error:'შეგიძლია წაშალო მხოლოდ შენი ხუმრობა. admin-ს შეუძლია ყველა.'}); await deleteCloud(joke.image); await pool.query('DELETE FROM jokes WHERE id=$1',[req.params.id]); broadcast('joke:deleted', { id: Number(req.params.id) }); res.json({message:'ხუმრობა წაიშალა.'}); } catch(e){next(e)} });
 
 app.get('/api/jokes/:id/comments', async (req,res,next)=>{ try{ const r=await pool.query('SELECT comments.*, users.avatar FROM comments LEFT JOIN users ON comments.user_id=users.id WHERE joke_id=$1 ORDER BY comments.id ASC',[req.params.id]); res.json(r.rows); } catch(e){next(e)} });
-app.post('/api/jokes/:id/comments', requireUser, async (req,res,next)=>{ try{ const {text}=req.body; if(!text || text.trim().length<2) return res.status(400).json({error:'კომენტარი ძალიან მოკლეა.'}); const joke=await pool.query('SELECT id FROM jokes WHERE id=$1',[req.params.id]); if(!joke.rowCount) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); const r=await pool.query('INSERT INTO comments (joke_id,user_id,username,text) VALUES ($1,$2,$3,$4) RETURNING *',[req.params.id,req.user.id,req.user.username,text.trim()]); res.status(201).json(r.rows[0]); } catch(e){next(e)} });
-app.delete('/api/comments/:id', requireUser, async (req,res,next)=>{ try{ const r=await pool.query('SELECT * FROM comments WHERE id=$1',[req.params.id]); const c=r.rows[0]; if(!c) return res.status(404).json({error:'კომენტარი ვერ მოიძებნა.'}); if(req.user.role !== 'admin' && c.user_id !== req.user.id) return res.status(403).json({error:'შეგიძლია წაშალო მხოლოდ შენი კომენტარი.'}); await pool.query('DELETE FROM comments WHERE id=$1',[req.params.id]); res.json({message:'კომენტარი წაიშალა.'}); } catch(e){next(e)} });
+app.post('/api/jokes/:id/comments', requireUser, async (req,res,next)=>{ try{ const {text}=req.body; if(!text || text.trim().length<2) return res.status(400).json({error:'კომენტარი ძალიან მოკლეა.'}); const joke=await pool.query('SELECT id FROM jokes WHERE id=$1',[req.params.id]); if(!joke.rowCount) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); const r=await pool.query('INSERT INTO comments (joke_id,user_id,username,text) VALUES ($1,$2,$3,$4) RETURNING *',[req.params.id,req.user.id,req.user.username,text.trim()]); broadcast('comment:created', { jokeId: Number(req.params.id), comment: r.rows[0] }); res.status(201).json(r.rows[0]); } catch(e){next(e)} });
+app.delete('/api/comments/:id', requireUser, async (req,res,next)=>{ try{ const r=await pool.query('SELECT * FROM comments WHERE id=$1',[req.params.id]); const c=r.rows[0]; if(!c) return res.status(404).json({error:'კომენტარი ვერ მოიძებნა.'}); if(req.user.role !== 'admin' && c.user_id !== req.user.id) return res.status(403).json({error:'შეგიძლია წაშალო მხოლოდ შენი კომენტარი.'}); await pool.query('DELETE FROM comments WHERE id=$1',[req.params.id]); broadcast('comment:deleted', { id: Number(req.params.id), jokeId: c.joke_id }); res.json({message:'კომენტარი წაიშალა.'}); } catch(e){next(e)} });
 
-app.post('/api/jokes/:id/report', requireUser, async (req,res,next)=>{ try{ const {reason}=req.body; if(!reason || reason.trim().length<3) return res.status(400).json({error:'მიზეზი ძალიან მოკლეა.'}); const joke=await pool.query('SELECT id FROM jokes WHERE id=$1',[req.params.id]); if(!joke.rowCount) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); try{ await pool.query('INSERT INTO reports (joke_id,user_id,username,reason) VALUES ($1,$2,$3,$4)',[req.params.id,req.user.id,req.user.username,reason.trim()]); } catch(e){ if(e.code==='23505') return res.status(400).json({error:'ეს ხუმრობა უკვე დარეპორტებული გაქვს.'}); throw e; } res.status(201).json({message:'Report გაიგზავნა.'}); } catch(e){next(e)} });
+app.post('/api/jokes/:id/report', requireUser, async (req,res,next)=>{ try{ const {reason}=req.body; if(!reason || reason.trim().length<3) return res.status(400).json({error:'მიზეზი ძალიან მოკლეა.'}); const joke=await pool.query('SELECT id FROM jokes WHERE id=$1',[req.params.id]); if(!joke.rowCount) return res.status(404).json({error:'ხუმრობა ვერ მოიძებნა.'}); try{ await pool.query('INSERT INTO reports (joke_id,user_id,username,reason) VALUES ($1,$2,$3,$4)',[req.params.id,req.user.id,req.user.username,reason.trim()]); } catch(e){ if(e.code==='23505') return res.status(400).json({error:'ეს ხუმრობა უკვე დარეპორტებული გაქვს.'}); throw e; } broadcast('report:created', { jokeId: Number(req.params.id) }); res.status(201).json({message:'Report გაიგზავნა.'}); } catch(e){next(e)} });
 app.get('/api/admin/reports', requireAdmin, async (req,res,next)=>{ try{ const r=await pool.query('SELECT reports.*, jokes.text AS joke_text, jokes.username AS joke_author, jokes.image AS joke_image FROM reports LEFT JOIN jokes ON reports.joke_id=jokes.id ORDER BY reports.id DESC'); res.json(r.rows); } catch(e){next(e)} });
-app.delete('/api/admin/reports/:id', requireAdmin, async (req,res,next)=>{ try{ await pool.query('DELETE FROM reports WHERE id=$1',[req.params.id]); res.json({message:'Report წაიშალა.'}); } catch(e){next(e)} });
+app.delete('/api/admin/reports/:id', requireAdmin, async (req,res,next)=>{ try{ await pool.query('DELETE FROM reports WHERE id=$1',[req.params.id]); broadcast('report:deleted', { id: Number(req.params.id) }); res.json({message:'Report წაიშალა.'}); } catch(e){next(e)} });
 app.get('/api/admin/users', requireAdmin, async (req,res,next)=>{ try{ const r=await pool.query('SELECT users.id,users.username,users.role,users.avatar,users.created_at,(SELECT COUNT(*)::int FROM jokes WHERE jokes.user_id=users.id) AS "jokesCount",(SELECT COUNT(*)::int FROM comments WHERE comments.user_id=users.id) AS "commentsCount" FROM users ORDER BY users.id DESC'); res.json(r.rows); } catch(e){next(e)} });
 app.get('/api/stats', async (req,res,next)=>{ try{ const tj=await pool.query('SELECT COUNT(*) FROM jokes'); const tl=await pool.query('SELECT COALESCE(SUM(laughs),0) AS total FROM jokes'); const tc=await pool.query('SELECT category, COUNT(*) FROM jokes GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1'); res.json({totalJokes:+tj.rows[0].count,totalLaughs:+tl.rows[0].total,topCategory:tc.rows[0]?tc.rows[0].category:'-'}); } catch(e){next(e)} });
 
 app.get('*', (req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err, req, res, next)=>{ console.error(err); if(err instanceof multer.MulterError && err.code==='LIMIT_FILE_SIZE') return res.status(400).json({error:'ფოტო ძალიან დიდია. მაქსიმუმ 10MB.'}); res.status(400).json({error: err.message || 'სერვერის შეცდომა.'}); });
 
-initDb().then(()=>app.listen(PORT,()=>console.log(`JokeHub running on port ${PORT}`))).catch(e=>{ console.error('Database initialization failed:', e); process.exit(1); });
+initDb().then(()=>httpServer.listen(PORT,()=>console.log(`JokeHub running on port ${PORT}`))).catch(e=>{ console.error('Database initialization failed:', e); process.exit(1); });

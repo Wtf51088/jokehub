@@ -1,70 +1,57 @@
-# ხუმროHub — Social Version FIXED
+# ხუმროHub — Neon + Cloudinary Upgrade
 
-დამატებულია და გასწორებულია:
+ეს ვერსია აღარ იყენებს SQLite-ს და local uploads-ს.
 
-- პროფილის გვერდი
-- მომხმარებლის ყველა ხუმრობა
-- კომენტარები ხუმრობებზე
-- report button
-- admin panel ცალკე გვერდად
-- profile photo upload
-- joke/meme image upload
-- edit/delete მხოლოდ ავტორს ან admin-ს
-- username validation
-- upload error handler
-- comments აღარ იკეცება კომენტარის დამატების შემდეგ
-- password hashing bcrypt-ით
-- reaction spam fix: ერთ user-ს ერთ joke-ზე მხოლოდ ერთი reaction შეუძლია
-- admin მონაცემების დაყენება `.env`-ით
+## რას იყენებს
 
-## Admin account
+- Render — Node.js app hosting
+- Neon — PostgreSQL database
+- Cloudinary — profile/joke image storage
 
-Default:
+ამით redeploy/restart-ზე აღარ დაიკარგება:
+- users
+- jokes
+- comments
+- reports
+- reactions
+- profile photos
+- joke images
 
-```text
-username: 
-password: 
-```
+## Environment Variables Render-ში
 
-შეგიძლია შეცვალო `.env` ფაილით:
+აუცილებლად დაამატე:
 
 ```env
+DATABASE_URL=Neon connection string
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=yourStrongPassword
-PORT=3000
+NODE_ENV=production
 ```
 
-## User test account
+## Render commands
 
-```text
-username: gita
-password: 1234
-```
-
-## გაშვება
-
+Build Command:
 ```bash
 npm install
+```
+
+Start Command:
+```bash
 npm start
 ```
 
-შემდეგ გახსენი:
+## Admin
+
+Admin ავტომატურად იქმნება პირველ გაშვებაზე Environment Variables-დან:
 
 ```text
-http://localhost:3000
+ADMIN_USERNAME
+ADMIN_PASSWORD
 ```
 
 ## მნიშვნელოვანი
 
-თუ ძველი `jokes.db` გაქვს იმავე folder-ში, წაშალე და თავიდან გაუშვი, რომ ახალი database სუფთად შეიქმნას.
-
-ფოტოების ლიმიტი არის 2MB და დაშვებულია:
-
-```text
-jpg, png, webp, gif
-```
-
-
-## Reaction სისტემა
-
-მომხმარებელს ერთ ხუმრობაზე მხოლოდ ერთი reaction შეუძლია. თუ სხვა reaction-ს დააჭერს, ძველი მოეხსნება და ახალი დაემატება.
+ძველი SQLite database ავტომატურად არ გადმოვა Neon-ში. ეს არის ახალი სუფთა ვერსია.

@@ -574,3 +574,9 @@ footer {
   font-size: 12px;
   font-weight: bold;
 }
+
+
+.file-label + .light-btn {
+  margin-top: 10px;
+  width: 100%;
+}

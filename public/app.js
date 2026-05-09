@@ -259,27 +259,65 @@ function updateAuthUI() {
 }
 
 async function uploadAvatar() {
-  const file = document.getElementById("avatarInput").files[0];
-  if (!file) return;
+  const input = document.getElementById("avatarInput");
+  const file = input ? input.files[0] : null;
+
+  if (!currentUser) {
+    alert("პროფილის ფოტოს დასაყენებლად ჯერ შედი ანგარიშში.");
+    return;
+  }
+
+  if (!file) {
+    alert("ჯერ აირჩიე ფოტო.");
+    return;
+  }
 
   const formData = new FormData();
   formData.append("avatar", file);
 
-  const response = await fetch("/api/profile/avatar", {
-    method: "POST",
-    headers: authHeaders(),
-    body: formData
-  });
+  const clickedButton = typeof event !== "undefined" && event && event.target ? event.target : null;
+  const oldText = clickedButton ? clickedButton.textContent : "";
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    alert(data.error || "ფოტოს ატვირთვა ვერ მოხერხდა.");
-    return;
+  if (clickedButton) {
+    clickedButton.textContent = "იტვირთება...";
+    clickedButton.disabled = true;
   }
 
-  currentUser.avatar = data.avatar;
-  updateAuthUI();
+  try {
+    const response = await fetch("/api/profile/avatar", {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || "ფოტოს ატვირთვა ვერ მოხერხდა.");
+      return;
+    }
+
+    currentUser.avatar = data.avatar;
+    updateAuthUI();
+
+    const avatarName = document.getElementById("avatarFileName");
+    if (avatarName) avatarName.textContent = "ფოტო დაყენებულია ✅";
+
+    if (input) input.value = "";
+
+    await loadJokes();
+
+    if (!document.getElementById("profilePage").classList.contains("hidden")) {
+      loadProfile(currentUser.username);
+    }
+  } catch (error) {
+    alert("ფოტოს ატვირთვა ვერ მოხერხდა.");
+  } finally {
+    if (clickedButton) {
+      clickedButton.textContent = oldText || "ფოტოს დაყენება";
+      clickedButton.disabled = false;
+    }
+  }
 }
 
 async function loadJokes() {

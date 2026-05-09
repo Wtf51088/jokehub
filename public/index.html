@@ -64,10 +64,11 @@
 
             <label class="file-label">
               პროფილის ფოტო
-              <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="showSelectedFileName('avatarInput', 'avatarFileName'); uploadAvatar();" />
+              <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="showSelectedFileName('avatarInput', 'avatarFileName')" />
               <span id="avatarFileName" class="selected-file"></span>
             </label>
 
+            <button class="light-btn" onclick="uploadAvatar()">ფოტოს დაყენება</button>
             <button class="light-btn" onclick="logout()">გამოსვლა</button>
           </div>
         </div>
@@ -158,6 +159,6 @@
   <footer>ხუმროHub © 2026 — პატარა სოციალური საიტი ხუმრობებისთვის.</footer>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="app.js?v=dashboardfix1"></script>
+  <script src="app.js?v=avatarfix1"></script>
 </body>
 </html>
